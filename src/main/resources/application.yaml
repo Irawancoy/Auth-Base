@@ -13,8 +13,10 @@ application:
   security:
     uuid: b592691e-df3f-4049-86d5-50bdce269354
     strength: 8
-    system-username: SYSTEM
-    system-password: $2a$16$Pjg5ZRu.I2TsN5W38PMyQuYBorSrwmRKa/4fc01nEZl0FSOQeou3C # SYSADM
+    systemUsername: SYSTEM
+    # systemPassword: $2a$16$Pjg5ZRu.I2TsN5W38PMyQuYBorSrwmRKa/4fc01nEZl0FSOQeou3C # SYSADM
+    systemPassword: SYSADM
+    systemRole: ADMIN
 
 #-----------------------------------
 --- # i18n & L10n
@@ -42,6 +44,26 @@ spring:
   output:
     ansi:
       enabled: always # Just console color, I'm lovin' it!
+
+
+#-----------------------------------
+--- # Database H2
+#-----------------------------------
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:db;
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: sa
+  h2:
+    console:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
 
 # # -----------------------------------
 # --- #

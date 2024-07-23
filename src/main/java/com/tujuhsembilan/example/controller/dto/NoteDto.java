@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class NoteDto {
 
-  private UUID id;
+  // private UUID id;
 
   private String content;
 

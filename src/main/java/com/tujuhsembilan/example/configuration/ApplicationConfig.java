@@ -11,6 +11,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -46,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 @Configuration
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 @EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class ApplicationConfig {
 
   private final MessageUtil msg;
@@ -79,10 +81,10 @@ public class ApplicationConfig {
         .userDetailsService(new InMemoryUserDetailsManager(
             User.builder()
                 .username(prop.getSystemUsername())
-                .password(prop.getSystemPassword())
-                .authorities("SYSTEM", "ADMIN")
+                .password(passwordEncoder.encode(prop.getSystemPassword()))
+                .authorities("ROLE_" + prop.getSystemRole())
                 .build(),
-            User.builder()
+                User.builder()
                 .username("USER_A")
                 .password(passwordEncoder.encode("USER_A"))
                 .authorities("ROLE_A")
@@ -92,15 +94,16 @@ public class ApplicationConfig {
                 .password(passwordEncoder.encode("USER_B"))
                 .authorities("ROLE_B")
                 .build()))
-        .httpBasic(Customizer.withDefaults())
-        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-        // Authentication
-        .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
+                .httpBasic(Customizer.withDefaults())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Authentication
+        .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
         // Miscellaneous
         .csrf(AbstractHttpConfigurer::disable);
+        
 
-    return http.build();
-  }
+        return http.build();
+      }
 
   @Bean
   public ECKey ecJwk() throws IOException, ParseException {

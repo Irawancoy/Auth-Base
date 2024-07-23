@@ -26,7 +26,7 @@ public class NoteController {
 
   private final ModelMapper mdlMap;
 
-  @GetMapping
+  @GetMapping("/all")
   public ResponseEntity<?> getNotes() {
     return ResponseEntity
         .ok(repo.findAll()
@@ -35,7 +35,7 @@ public class NoteController {
             .collect(Collectors.toSet()));
   }
 
-  @PostMapping
+  @PostMapping("/save")
   public ResponseEntity<?> saveNote(@RequestBody NoteDto body) {
     var newNote = mdlMap.map(body, Note.class);
     newNote = repo.save(newNote);
