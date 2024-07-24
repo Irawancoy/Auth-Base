@@ -38,7 +38,7 @@ public class NoteController {
         
         // Validasi Device ID
         if (!isDeviceIdValid(userName, deviceId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Invalid Device ID");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(HttpStatus.FORBIDDEN);
         }
 
         List<Note> notes = repo.findByUserName(userName);
@@ -54,7 +54,7 @@ public class NoteController {
 
         // Validasi Device ID
         if (!isDeviceIdValid(userName, deviceId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Invalid Device ID");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(HttpStatus.FORBIDDEN);
         }
 
         Note note = mdlMap.map(body, Note.class);

@@ -117,14 +117,14 @@ public ResponseEntity<?> login(@NotNull Authentication auth, @RequestHeader("Dev
       refreshTokenRepo.deleteAllByUsername(refreshToken.getUsername());
 
       // Buat access token baru
-      User user = new User(refreshToken.getUsername(), "", List.of()); // Sesuaikan dengan detail pengguna
+      User user = new User(refreshToken.getUsername(), "", Set.of());
       long expirationTime = 3600L; // 1 jam
       var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
           JwtClaimsSet.builder()
               .issuer(authProp.getUuid())
               .audience(List.of(authProp.getUuid()))
               .subject(user.getUsername())
-              .claim("roles", List.of()) // Sesuaikan dengan role pengguna
+              .claim("roles", List.of()) 
               .expiresAt(Instant.now().plusSeconds(expirationTime))
               .build()));
       Map<String, Object> response = new HashMap<>();
@@ -134,7 +134,6 @@ public ResponseEntity<?> login(@NotNull Authentication auth, @RequestHeader("Dev
     }
     
 
-// remember me to add more expired token using access token
  @PostMapping("/remember-me")
  public ResponseEntity<?> rememberMe(@RequestHeader("Authorization") String authHeader) {
    String token = authHeader.replace("Bearer ", "");
