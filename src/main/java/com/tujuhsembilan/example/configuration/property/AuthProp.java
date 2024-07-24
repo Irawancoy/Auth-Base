@@ -22,6 +22,5 @@ public class AuthProp {
 
   private String systemUsername;
   private String systemPassword;
-  private String systemRole;
 
 }

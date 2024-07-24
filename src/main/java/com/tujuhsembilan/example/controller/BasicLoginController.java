@@ -3,6 +3,7 @@ package com.tujuhsembilan.example.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -34,29 +35,36 @@ import lombok.RequiredArgsConstructor;
 public class BasicLoginController {
 
   private final ObjectMapper objMap;
+    private final JwtEncoder jwtEncoder;
+    private final AuthProp authProp;
+    private final ECKey ecJwk;
 
-  private final JwtEncoder jwtEncoder;
-  private final AuthProp authProp;
+    @GetMapping("/jwks.json")
+    public ResponseEntity<?> jwk() throws JsonProcessingException {
+      return ResponseEntity.ok(Map.of("keys", Set.of(objMap.readTree(ecJwk.toPublicJWK().toJSONString()))));
+    }
 
-  private final ECKey ecJwk;
+    @PostMapping("/login")
+    public ResponseEntity<?> login(Authentication auth) {
+        if (auth != null && auth.isAuthenticated()) {
+            User user = (User) auth.getPrincipal();
+            List<String> roles =  ((User) auth.getPrincipal()).getAuthorities().stream()
+                .map(a -> a.getAuthority()).collect(Collectors.toList());
 
-  @GetMapping("/jwks.json")
-  public ResponseEntity<?> jwk() throws JsonProcessingException {
-    return ResponseEntity.ok(Map.of("keys", Set.of(objMap.readTree(ecJwk.toPublicJWK().toJSONString()))));
-  }
+            String jwtToken = jwtEncoder.encode(JwtEncoderParameters.from(
+                    JwsHeader.with(SignatureAlgorithm.ES512).build(),
+                    JwtClaimsSet.builder()
+                            .issuer(authProp.getUuid())
+                            .audience(List.of(authProp.getUuid()))
+                            .subject(user.getUsername())
+                            .claim("role", roles)
+                            // Set expiration, claims, etc. here too
+                            .build()
+            )).getTokenValue();
 
-  // You MUST login using BASIC AUTH, NOT POST BODY
-  @PostMapping("/login")
-  public ResponseEntity<?> login(@NotNull Authentication auth) {
-    var jwt = jwtEncoder
-        .encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
-            JwtClaimsSet.builder()
-                .issuer(authProp.getUuid())
-                .audience(List.of(authProp.getUuid()))
-                .subject(((User) auth.getPrincipal()).getUsername())
-                // You SHOULD set expiration, claims, etc here too
-                .build()));
-    return ResponseEntity.ok(jwt.getTokenValue());
-  }
-
+            return ResponseEntity.ok(Map.of("token", jwtToken, "roles", roles));
+        } else {
+            return ResponseEntity.status(401).body(Map.of("error", "Authentication failed"));
+        }
+    }
 }
