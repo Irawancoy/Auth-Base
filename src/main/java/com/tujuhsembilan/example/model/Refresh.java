@@ -16,5 +16,6 @@ public class Refresh {
     private String token;
       private String username;
       private Instant expiryDate;
+      private String deviceId;
 
 }

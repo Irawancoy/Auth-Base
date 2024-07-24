@@ -60,31 +60,36 @@ private final JwtEncoder jwtEncoder;
   }
 
   // You MUST login using BASIC AUTH, NOT POST BODY
-  @PostMapping("/login")
-  public ResponseEntity<?> login(@NotNull Authentication auth) {
+  @Transactional
+@PostMapping("/login")
+public ResponseEntity<?> login(@NotNull Authentication auth, @RequestHeader("Device-Id") String deviceId) {
     User user = (User) auth.getPrincipal();
 
-    long expirationTime = 60L;// exp dalam detik
-    var jwt = jwtEncoder
-        .encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
-            JwtClaimsSet.builder()
-                .issuer(authProp.getUuid())
-                .audience(List.of(authProp.getUuid()))
-                .subject(user.getUsername())
-                .claim("roles", user.getAuthorities().stream()
-                    .map(GrantedAuthority::getAuthority)
-                    .collect(Collectors.toList()))
-                .expiresAt(Instant.now().plusSeconds(expirationTime))
-                .build()));
+    // Hapus semua refresh token untuk pengguna ini, termasuk dari perangkat yang sedang digunakan
+    refreshTokenRepo.deleteAllByUsername(user.getUsername());
 
-    //buat refresh token ke repo dengan username 
+    // Buat JWT baru
+    long expirationTime = 60L; // Expired in seconds
+    var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
+        JwtClaimsSet.builder()
+            .issuer(authProp.getUuid())
+            .audience(List.of(authProp.getUuid()))
+            .subject(user.getUsername())
+            .claim("roles", user.getAuthorities().stream()
+                .map(GrantedAuthority::getAuthority)
+                .collect(Collectors.toList()))
+            .expiresAt(Instant.now().plusSeconds(expirationTime))
+            .build()));
+
+    // Buat refresh token baru
     Refresh refresh = new Refresh();
     refresh.setUsername(user.getUsername());
     refresh.setToken(UUID.randomUUID().toString());
-    refresh.setExpiryDate(Instant.now().plusSeconds(604800L));// 7 hari
+    refresh.setExpiryDate(Instant.now().plusSeconds(604800L)); // 7 hari
+    refresh.setDeviceId(deviceId); // Simpan informasi device
     refreshTokenRepo.save(refresh);
 
-    // Create a response object with user details, roles, and JWT token
+    // Buat objek response
     Map<String, Object> response = new HashMap<>();
     response.put("user", Map.of(
         "username", user.getUsername(),
@@ -93,33 +98,40 @@ private final JwtEncoder jwtEncoder;
             .collect(Collectors.toList())));
     response.put("token", jwt.getTokenValue());
     response.put("refresh_token", refresh.getToken());
+    response.put("expires_in", expirationTime);
+    response.put("device_id", deviceId);
 
     return ResponseEntity.ok(response);
-  }
+}
+
+
 
   @Transactional
-@PostMapping("/refresh-token")
-public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
-  String requestRefreshToken = request.get("refreshToken");
-  Refresh refreshToken = refreshTokenRepo.findByToken(requestRefreshToken)
-      .orElseThrow(() -> new RuntimeException("Refresh token tidak ditemukan!"));
+  @PostMapping("/refresh-token")
+  public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
+    String requestRefreshToken = request.get("refreshToken");
+    Refresh refreshToken = refreshTokenRepo.findByToken(requestRefreshToken)
+        .orElseThrow(() -> new RuntimeException("Refresh token tidak ditemukan!"));
 
-  // Buat access token baru
-  User user = new User(refreshToken.getUsername(), "", List.of()); // Sesuaikan dengan detail pengguna
-  long expirationTime = 3600L; // 1 jam
-  var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
-      JwtClaimsSet.builder()
-          .issuer(authProp.getUuid())
-          .audience(List.of(authProp.getUuid()))
-          .subject(user.getUsername())
-          .claim("roles", List.of()) // Sesuaikan dengan role pengguna
-          .expiresAt(Instant.now().plusSeconds(expirationTime))
-          .build()));
-  Map<String, Object> response = new HashMap<>();
-  response.put("token", jwt.getTokenValue());
+      // Hapus refresh token lama jika ada di perangkat lain
+      refreshTokenRepo.deleteAllByUsername(refreshToken.getUsername());
 
-  return ResponseEntity.ok(response);
-}
+      // Buat access token baru
+      User user = new User(refreshToken.getUsername(), "", List.of()); // Sesuaikan dengan detail pengguna
+      long expirationTime = 3600L; // 1 jam
+      var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
+          JwtClaimsSet.builder()
+              .issuer(authProp.getUuid())
+              .audience(List.of(authProp.getUuid()))
+              .subject(user.getUsername())
+              .claim("roles", List.of()) // Sesuaikan dengan role pengguna
+              .expiresAt(Instant.now().plusSeconds(expirationTime))
+              .build()));
+      Map<String, Object> response = new HashMap<>();
+      response.put("token", jwt.getTokenValue());
+
+      return ResponseEntity.ok(response);
+    }
     
 
 // remember me to add more expired token using access token
@@ -155,24 +167,25 @@ public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) 
 
  @PostMapping("/logout")
  public ResponseEntity<?> logout(@RequestHeader("Authorization") String authHeader) {
-     String token = authHeader.replace("Bearer ", "");
-     String username;
+   String token = authHeader.replace("Bearer ", "");
+   String username;
 
-     try {
-         var jwt = jwtDecoder.decode(token);
-         username = jwt.getSubject();
-     } catch (JwtException e) {
-         return ResponseEntity.status(401).body(Map.of("error", "Invalid access token!"));
-     }
+    try {
+      var jwt = jwtDecoder.decode(token);
+      username = jwt.getSubject();
+    } catch (JwtException e) {
+      return ResponseEntity.status(401).body(Map.of("error", "Invalid access token!"));
+    }
 
-     // Hapus semua refresh token dari pengguna yang logout
-     refreshTokenRepo.deleteAllByUsername(username);
+    // Hapus semua refresh token dari pengguna yang logout
+    refreshTokenRepo.deleteAllByUsername(username);
 
-     Map<String, String> response = new HashMap<>();
-     response.put("message", "Logged out successfully.");
-     
-     return ResponseEntity.ok(response);
- }
+    Map<String, String> response = new HashMap<>();
+    response.put("message", "Logged out successfully.");
+
+    return ResponseEntity.ok(response);
+  }
+
 
     
 
