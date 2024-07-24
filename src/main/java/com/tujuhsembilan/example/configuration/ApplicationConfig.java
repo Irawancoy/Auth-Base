@@ -11,6 +11,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -68,16 +69,14 @@ public class ApplicationConfig {
 
   @Bean
   public SecurityFilterChain securityConfig(HttpSecurity http, PasswordEncoder passwordEncoder, AuthProp prop)
-      throws Exception {
-    http
-        // Access Control
-        .authorizeHttpRequests(req -> req
-            .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/jwks.json")).permitAll()
-            .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/login")).permitAll()
-            .requestMatchers(AntPathRequestMatcher.antMatcher("/admin/profile")).hasRole("ADMIN") // Menambahkan aturan akses untuk role ADMIN
-            .anyRequest().authenticated())
+          throws Exception {
+      http
+          .authorizeHttpRequests(req -> req
+              .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/jwks.json")).permitAll()
+              .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/login")).permitAll()
+              .anyRequest().authenticated())
         // Authorization (DEFAULT IN MEM)
-        .userDetailsService(new InMemoryUserDetailsManager(
+          .userDetailsService(new InMemoryUserDetailsManager(
             User.builder()
                 .username(prop.getSystemUsername())
                 .password(prop.getSystemPassword())
@@ -101,7 +100,8 @@ public class ApplicationConfig {
         .csrf(AbstractHttpConfigurer::disable);
 
     return http.build();
-  }
+}
+
 
   @Bean
   public ECKey ecJwk() throws IOException, ParseException {
@@ -130,7 +130,7 @@ public class ApplicationConfig {
   // --- OAuth2 Resource Server Configuration
 
   @Bean
-  public JwtDecoder jwtDecoder(JWKSource<SecurityContext> source, AuthProp prop) {
+public JwtDecoder jwtDecoder(JWKSource<SecurityContext> source, AuthProp prop) {
     NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) OAuth2AuthorizationServerConfiguration.jwtDecoder(source);
 
     jwtDecoder.setJwtValidator(
@@ -139,6 +139,7 @@ public class ApplicationConfig {
             jwt -> OAuth2TokenValidatorResult.success()));
 
     return jwtDecoder;
-  }
+}
+
 
 }

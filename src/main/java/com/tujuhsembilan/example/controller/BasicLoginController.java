@@ -1,5 +1,6 @@
 package com.tujuhsembilan.example.controller;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -8,6 +9,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -35,36 +37,44 @@ import lombok.RequiredArgsConstructor;
 public class BasicLoginController {
 
   private final ObjectMapper objMap;
-    private final JwtEncoder jwtEncoder;
-    private final AuthProp authProp;
-    private final ECKey ecJwk;
 
-    @GetMapping("/jwks.json")
-    public ResponseEntity<?> jwk() throws JsonProcessingException {
-      return ResponseEntity.ok(Map.of("keys", Set.of(objMap.readTree(ecJwk.toPublicJWK().toJSONString()))));
-    }
+  private final JwtEncoder jwtEncoder;
+  private final AuthProp authProp;
 
-    @PostMapping("/login")
-    public ResponseEntity<?> login(Authentication auth) {
-        if (auth != null && auth.isAuthenticated()) {
-            User user = (User) auth.getPrincipal();
-            List<String> roles =  ((User) auth.getPrincipal()).getAuthorities().stream()
-                .map(a -> a.getAuthority()).collect(Collectors.toList());
+  private final ECKey ecJwk;
 
-            String jwtToken = jwtEncoder.encode(JwtEncoderParameters.from(
-                    JwsHeader.with(SignatureAlgorithm.ES512).build(),
-                    JwtClaimsSet.builder()
-                            .issuer(authProp.getUuid())
-                            .audience(List.of(authProp.getUuid()))
-                            .subject(user.getUsername())
-                            .claim("role", roles)
-                            // Set expiration, claims, etc. here too
-                            .build()
-            )).getTokenValue();
+  @GetMapping("/jwks.json")
+  public ResponseEntity<?> jwk() throws JsonProcessingException {
+    return ResponseEntity.ok(Map.of("keys", Set.of(objMap.readTree(ecJwk.toPublicJWK().toJSONString()))));
+  }
 
-            return ResponseEntity.ok(Map.of("token", jwtToken, "roles", roles));
-        } else {
-            return ResponseEntity.status(401).body(Map.of("error", "Authentication failed"));
-        }
-    }
+  // You MUST login using BASIC AUTH, NOT POST BODY
+  @PostMapping("/login")
+  public ResponseEntity<?> login(@NotNull Authentication auth) {
+      User user = (User) auth.getPrincipal();
+      var jwt = jwtEncoder
+          .encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
+              JwtClaimsSet.builder()
+                  .issuer(authProp.getUuid())
+                  .audience(List.of(authProp.getUuid()))
+                  .subject(user.getUsername())
+                  .claim("roles", user.getAuthorities().stream()
+                          .map(GrantedAuthority::getAuthority)
+                          .collect(Collectors.toList()))
+                  .build()));
+  
+      // Create a response object with user details, roles, and JWT token
+      Map<String, Object> response = new HashMap<>();
+      response.put("user", Map.of(
+          "username", user.getUsername(),
+          "roles", user.getAuthorities().stream()
+              .map(GrantedAuthority::getAuthority)
+              .collect(Collectors.toList())
+      ));
+      response.put("token", jwt.getTokenValue());
+  
+      return ResponseEntity.ok(response);
+  }
+  
+
 }
