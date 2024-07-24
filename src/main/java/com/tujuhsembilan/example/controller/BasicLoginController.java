@@ -1,5 +1,6 @@
 package com.tujuhsembilan.example.controller;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +52,9 @@ public class BasicLoginController {
   // You MUST login using BASIC AUTH, NOT POST BODY
   @PostMapping("/login")
   public ResponseEntity<?> login(@NotNull Authentication auth) {
-      User user = (User) auth.getPrincipal();
+    User user = (User) auth.getPrincipal();
+    // expire 1 menit
+    long expirationTime = 5L;
       var jwt = jwtEncoder
           .encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
               JwtClaimsSet.builder()
@@ -60,7 +63,9 @@ public class BasicLoginController {
                   .subject(user.getUsername())
                   .claim("roles", user.getAuthorities().stream()
                           .map(GrantedAuthority::getAuthority)
-                          .collect(Collectors.toList()))
+                      .collect(Collectors.toList()))
+                 .expiresAt(Instant.now().plusSeconds(expirationTime)
+                 )
                   .build()));
   
       // Create a response object with user details, roles, and JWT token
