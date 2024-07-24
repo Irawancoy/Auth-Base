@@ -6,5 +6,5 @@ import com.tujuhsembilan.example.model.Refresh;
 
 public interface RefreshTokenRepo extends JpaRepository<Refresh, Long> {
    Optional<Refresh> findByToken(String token);
-   void deleteByUsername(String username);
+   void deleteAllByUsername(String username);
 }

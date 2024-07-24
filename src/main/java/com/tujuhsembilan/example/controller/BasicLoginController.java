@@ -19,10 +19,13 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.security.oauth2.jwt.JwtException;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -45,7 +48,8 @@ public class BasicLoginController {
   
 
 private final ObjectMapper objMap;
-    private final JwtEncoder jwtEncoder;
+private final JwtEncoder jwtEncoder;
+    private final JwtDecoder jwtDecoder;
     private final AuthProp authProp;
     private final ECKey ecJwk;
     private final RefreshTokenRepo refreshTokenRepo;
@@ -60,7 +64,7 @@ private final ObjectMapper objMap;
   public ResponseEntity<?> login(@NotNull Authentication auth) {
     User user = (User) auth.getPrincipal();
 
-    long expirationTime = 5L;// exp dalam detik
+    long expirationTime = 60L;// exp dalam detik
     var jwt = jwtEncoder
         .encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
             JwtClaimsSet.builder()
@@ -93,27 +97,86 @@ private final ObjectMapper objMap;
     return ResponseEntity.ok(response);
   }
 
+  @Transactional
 @PostMapping("/refresh-token")
-    public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
-        String requestRefreshToken = request.get("refreshToken");
-        Refresh refreshToken = refreshTokenRepo.findByToken(requestRefreshToken)
-                .orElseThrow(() -> new RuntimeException("Refresh token tidak ditemukan!"));
+public ResponseEntity<?> refreshToken(@RequestBody Map<String, String> request) {
+  String requestRefreshToken = request.get("refreshToken");
+  Refresh refreshToken = refreshTokenRepo.findByToken(requestRefreshToken)
+      .orElseThrow(() -> new RuntimeException("Refresh token tidak ditemukan!"));
 
-        // Buat access token baru
-        User user = new User(refreshToken.getUsername(), "", List.of()); // Sesuaikan dengan detail pengguna
-        long expirationTime = 3600L; // 1 jam
-        var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
-                JwtClaimsSet.builder()
-                        .issuer(authProp.getUuid())
-                        .audience(List.of(authProp.getUuid()))
-                        .subject(user.getUsername())
-                        .claim("roles", List.of()) // Sesuaikan dengan role pengguna
-                        .expiresAt(Instant.now().plusSeconds(expirationTime))
-                        .build()));
-        Map<String, Object> response = new HashMap<>();
-        response.put("token", jwt.getTokenValue());
+  // Buat access token baru
+  User user = new User(refreshToken.getUsername(), "", List.of()); // Sesuaikan dengan detail pengguna
+  long expirationTime = 3600L; // 1 jam
+  var jwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
+      JwtClaimsSet.builder()
+          .issuer(authProp.getUuid())
+          .audience(List.of(authProp.getUuid()))
+          .subject(user.getUsername())
+          .claim("roles", List.of()) // Sesuaikan dengan role pengguna
+          .expiresAt(Instant.now().plusSeconds(expirationTime))
+          .build()));
+  Map<String, Object> response = new HashMap<>();
+  response.put("token", jwt.getTokenValue());
 
-        return ResponseEntity.ok(response);
-    }
+  return ResponseEntity.ok(response);
+}
+    
+
+// remember me to add more expired token using access token
+ @PostMapping("/remember-me")
+ public ResponseEntity<?> rememberMe(@RequestHeader("Authorization") String authHeader) {
+   String token = authHeader.replace("Bearer ", "");
+   String username;
+   List<String> roles;
+
+   try {
+     var jwt = jwtDecoder.decode(token);
+     username = jwt.getSubject();
+     roles = jwt.getClaimAsStringList("roles");
+   } catch (JwtException e) {
+     return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+   }
+
+   long expirationTime = 604800L; // 7 hari
+   var newJwt = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(SignatureAlgorithm.ES512).build(),
+       JwtClaimsSet.builder()
+           .issuer(authProp.getUuid())
+           .audience(List.of(authProp.getUuid()))
+           .subject(username)
+           .claim("roles", roles)
+           .expiresAt(Instant.now().plusSeconds(expirationTime))
+           .build()));
+
+   Map<String, Object> response = new HashMap<>();
+   response.put("token", newJwt.getTokenValue());
+
+   return ResponseEntity.ok(response);
+ }
+
+ @PostMapping("/logout")
+ public ResponseEntity<?> logout(@RequestHeader("Authorization") String authHeader) {
+     String token = authHeader.replace("Bearer ", "");
+     String username;
+
+     try {
+         var jwt = jwtDecoder.decode(token);
+         username = jwt.getSubject();
+     } catch (JwtException e) {
+         return ResponseEntity.status(401).body(Map.of("error", "Invalid access token!"));
+     }
+
+     // Hapus semua refresh token dari pengguna yang logout
+     refreshTokenRepo.deleteAllByUsername(username);
+
+     Map<String, String> response = new HashMap<>();
+     response.put("message", "Logged out successfully.");
+     
+     return ResponseEntity.ok(response);
+ }
+
+    
+
+
+
 
 }
