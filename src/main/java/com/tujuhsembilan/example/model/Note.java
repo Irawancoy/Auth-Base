@@ -26,4 +26,6 @@ public class Note {
 
   private String content;
 
+  private String userName;
+
 }
