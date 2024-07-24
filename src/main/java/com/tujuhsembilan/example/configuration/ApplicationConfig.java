@@ -73,6 +73,7 @@ public class ApplicationConfig {
           .authorizeHttpRequests(req -> req
               .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/jwks.json")).permitAll()
               .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/login")).permitAll()
+              .requestMatchers(AntPathRequestMatcher.antMatcher("/auth/refresh-token")).permitAll()
               .anyRequest().authenticated())
         // Authorization (DEFAULT IN MEM)
           .userDetailsService(new InMemoryUserDetailsManager(
