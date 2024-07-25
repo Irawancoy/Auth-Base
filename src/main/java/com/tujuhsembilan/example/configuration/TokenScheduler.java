@@ -1,5 +1,8 @@
 package com.tujuhsembilan.example.configuration;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,20 +16,30 @@ import java.util.List;
 @Component
 public class TokenScheduler {
 
-    private final RefreshTokenRepo refreshTokenRepo;
+   private static final Logger logger = LoggerFactory.getLogger(TokenScheduler.class);
 
-    public TokenScheduler(RefreshTokenRepo refreshTokenRepo) {
-        this.refreshTokenRepo = refreshTokenRepo;
-    }
+   @Autowired
+   private RefreshTokenRepo refreshTokenRepo;
 
-    @Scheduled(fixedRate = 300000) // 5 menit (300000 ms)
+   //1 menit
+   @Scheduled(fixedRate = 60000)
     @Transactional
     public void refreshExpiredTokens() {
-        List<Refresh> expiredTokens = refreshTokenRepo.findAllByExpiryDateBefore(Instant.now());
+        try {
+            List<Refresh> expiredTokens = refreshTokenRepo.findAllByExpiryDateBefore(Instant.now());
+            if (expiredTokens.isEmpty()) {
+                logger.info("No expired tokens found to refresh.");
+                return;
+            }
 
-        for (Refresh token : expiredTokens) {
-            token.setExpiryDate(Instant.now().plusSeconds(604800L)); // 7 hari
-            refreshTokenRepo.save(token);
+            for (Refresh token : expiredTokens) {
+                token.setExpiryDate(Instant.now().plusSeconds(604800L)); // 7 hari
+                refreshTokenRepo.save(token);
+            }
+
+            logger.info("Refreshed {} expired tokens.", expiredTokens.size());
+        } catch (Exception e) {
+            logger.error("Error occurred while refreshing tokens: ", e);
         }
     }
 }

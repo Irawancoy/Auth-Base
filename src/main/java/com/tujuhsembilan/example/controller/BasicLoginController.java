@@ -85,7 +85,7 @@ public ResponseEntity<?> login(@NotNull Authentication auth, @RequestHeader("Dev
     Refresh refresh = new Refresh();
     refresh.setUsername(user.getUsername());
     refresh.setToken(UUID.randomUUID().toString());
-    refresh.setExpiryDate(Instant.now().plusSeconds(604800L)); // 7 hari
+    refresh.setExpiryDate(Instant.now().plusSeconds(30L));//30 detik
     refresh.setDeviceId(deviceId); // Simpan informasi device
     refreshTokenRepo.save(refresh);
 
@@ -124,7 +124,9 @@ public ResponseEntity<?> login(@NotNull Authentication auth, @RequestHeader("Dev
               .issuer(authProp.getUuid())
               .audience(List.of(authProp.getUuid()))
               .subject(user.getUsername())
-              .claim("roles", List.of()) 
+              .claim("roles", user.getAuthorities().stream()
+                  .map(GrantedAuthority::getAuthority)
+                  .collect(Collectors.toList()))
               .expiresAt(Instant.now().plusSeconds(expirationTime))
               .build()));
       Map<String, Object> response = new HashMap<>();
